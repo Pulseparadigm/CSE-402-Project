@@ -287,10 +287,14 @@ def plot_convergence(results):
     for idx in range(len(results), rows * cols):
         axes.flat[idx].set_visible(False)
 
+    import os
+    plot_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "plots"))
+    os.makedirs(plot_dir, exist_ok=True)
+    out_path = os.path.join(plot_dir, "convergence_comparison.png")
+
     plt.tight_layout()
-    plt.savefig("convergence_comparison.png", dpi=150, bbox_inches="tight",
-                facecolor=COLORS["bg"])
-    print("\n[✓] Saved: convergence_comparison.png")
+    plt.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=COLORS["bg"])
+    print(f"\n[✓] Saved: {out_path}")
     plt.close()
 
 
@@ -332,10 +336,12 @@ def plot_summary_bar(results):
         "Efficiency Summary: Newton's Method vs Weerakoon-Fernando VNM",
         fontsize=13, fontweight="bold", color=COLORS["text"]
     )
+    import os
+    plot_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "plots"))
+    out_path = os.path.join(plot_dir, "efficiency_summary.png")
     plt.tight_layout()
-    plt.savefig("efficiency_summary.png", dpi=150, bbox_inches="tight",
-                facecolor=COLORS["bg"])
-    print("[✓] Saved: efficiency_summary.png")
+    plt.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=COLORS["bg"])
+    print(f"[✓] Saved: {out_path}")
     plt.close()
 
 
@@ -399,10 +405,12 @@ def plot_function_roots(results):
     for idx in range(len(results), rows * cols):
         axes.flat[idx].set_visible(False)
 
+    import os
+    plot_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "plots"))
+    out_path = os.path.join(plot_dir, "root_paths.png")
     plt.tight_layout()
-    plt.savefig("root_paths.png", dpi=150, bbox_inches="tight",
-                facecolor=COLORS["bg"])
-    print("[✓] Saved: root_paths.png")
+    plt.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=COLORS["bg"])
+    print(f"[✓] Saved: {out_path}")
     plt.close()
 
 
@@ -461,10 +469,12 @@ def plot_coc_comparison(results):
     for idx in range(len(results), rows * cols):
         axes.flat[idx].set_visible(False)
 
+    import os
+    plot_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "plots"))
+    out_path = os.path.join(plot_dir, "coc_comparison.png")
     plt.tight_layout()
-    plt.savefig("coc_comparison.png", dpi=150, bbox_inches="tight",
-                facecolor=COLORS["bg"])
-    print("[✓] Saved: coc_comparison.png")
+    plt.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=COLORS["bg"])
+    print(f"[✓] Saved: {out_path}")
     plt.close()
 
 

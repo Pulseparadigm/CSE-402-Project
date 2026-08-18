@@ -19,7 +19,7 @@ Each iteration has two steps:
 
 ---
 
-## Implementation: `weerakoon_fernando.py`
+## Implementation: `src/weerakoon_fernando.py`
 
 ### Functions
 - `newton_method(f, df, x0)` — Classical Newton-Raphson (order 2)
@@ -39,17 +39,19 @@ Each iteration has two steps:
 
 ---
 
-## Results
+## Results & Visualizations
 
-### Plots Generated
+### Convergence Rate (Log Scale)
+![Convergence Comparison](plots/convergence_comparison.png)
 
-![Convergence Comparison](C:\Users\johnd\.gemini\antigravity\brain\70bd8697-4342-4c19-bc59-4c4cd73983aa\convergence_comparison.png)
+### Efficiency Comparison (Iterations & NFEV)
+![Efficiency Summary](plots/efficiency_summary.png)
 
-![Efficiency Summary (Iterations & NFEV)](C:\Users\johnd\.gemini\antigravity\brain\70bd8697-4342-4c19-bc59-4c4cd73983aa\efficiency_summary.png)
+### Root-Finding Iteration Paths
+![Root Finding Paths](plots/root_paths.png)
 
-![Root Finding Paths](C:\Users\johnd\.gemini\antigravity\brain\70bd8697-4342-4c19-bc59-4c4cd73983aa\root_paths.png)
-
-![Computational Order of Convergence](C:\Users\johnd\.gemini\antigravity\brain\70bd8697-4342-4c19-bc59-4c4cd73983aa\coc_comparison.png)
+### Computational Order of Convergence (COC)
+![Computational Order of Convergence](plots/coc_comparison.png)
 
 ---
 
@@ -62,12 +64,24 @@ Each iteration has two steps:
 - **VNM COC ≈ 3.0** (cubic) — confirmed by plots
 - VNM requires **no second derivatives** — unlike other third-order methods (e.g., Halley's method)
 
-## Output Files
+---
 
-| File | Description |
-|------|-------------|
-| `weerakoon_fernando.py` | Full implementation |
-| `convergence_comparison.png` | Error vs iteration (log scale) for all 6 functions |
-| `efficiency_summary.png` | Bar chart of iterations & NFEV: NM vs VNM |
-| `root_paths.png` | Function plots with iteration paths marked |
-| `coc_comparison.png` | COC per iteration showing convergence order |
+## Repository Structure
+
+```
+CSE-402-Project/
+├── README.md                           # Main repository overview
+├── walkthrough.md                      # Detailed technical report
+├── .gitignore                          # Excluded files configuration
+├── src/
+│   └── weerakoon_fernando.py           # Core implementation of NM & VNM
+├── paper/
+│   ├── A Variant of Newton’s Method...pdf  # Original research paper
+│   ├── extract_pdf.py                  # Text extraction script
+│   └── paper_text.txt                  # Extracted paper text
+└── plots/
+    ├── convergence_comparison.png      # Iteration error plots
+    ├── efficiency_summary.png          # Bar chart comparison
+    ├── root_paths.png                  # Function trajectory plots
+    └── coc_comparison.png              # Convergence order analysis
+```
