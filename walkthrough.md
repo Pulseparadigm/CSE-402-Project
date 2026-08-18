@@ -1,66 +1,82 @@
-# Implementation & Upgrades: Weerakoon & Fernando (2000)
-## "A Variant of Newton's Method with Accelerated Third-Order Convergence"
-*Applied Mathematics Letters, 13(8), pp. 87–93*
+# Comparative Report: Weerakoon–Fernando Method & Modern Upgrades
+
+**Paper Title:** *A Variant of Newton's Method with Accelerated Third-Order Convergence*  
+**Authors:** S. Weerakoon and T. G. I. Fernando (*Applied Mathematics Letters*, 13(8), pp. 87–93, 2000)  
+**Implementation & Benchmark Suite:** [`src/weerakoon_fernando.py`](file:///f:/4-1/402/project/src/weerakoon_fernando.py)
 
 ---
 
-## 🚀 Implemented Methods Overview
+## 📋 Executive Summary of Comparison
 
-This repository implements both the original Weerakoon–Fernando method (VNM) and three powerful extensions:
-
-| Method | Order ($p$) | Derivative Requirement | Formula / Update Rule |
-|--------|------------|------------------------|-----------------------|
-| **Newton–Raphson** | 2 | $f'(x)$ | $x_{n+1} = x_n - \frac{f(x_n)}{f'(x_n)}$ |
-| **Weerakoon–Fernando (VNM)** | **3** | $f'(x)$ | $x_{n+1} = x_n - \frac{2 f(x_n)}{f'(x_n) + f'(y_n)}$ |
-| **Simpson–VNM Upgrade** | **4** | $f'(x)$ | $x_{n+1} = x_n - \frac{6 f(x_n)}{f'(x_n) + 4f'(z_n) + f'(y_n)}$ where $z_n = \frac{x_n + y_n}{2}$ |
-| **Steffensen–VNM Upgrade** | **3** | **Derivative-Free** | Replaces $f'(x)$ with forward finite difference ratios |
-| **Multivariate VNM System** | **3** | Jacobian $J(X)$ | $(J(X_n) + J(Y_n)) \Delta X = 2 F(X_n)$, $X_{n+1} = X_n - \Delta X$ |
+This benchmark suite evaluates the **Weerakoon–Fernando Method (VNM)** against the classical **Newton–Raphson** method and two high-level extensions:
+1. **Simpson–VNM Upgrade:** Uses Simpson’s 1/3 quadrature rule to boost convergence to **Order 4 (Quartic)**.
+2. **Steffensen–VNM Upgrade:** Replaces analytical derivatives with finite difference approximations for **Derivative-Free Order 3** convergence.
+3. **Multivariate VNM System:** Extends VNM to solve non-linear 2D systems $F(X) = 0$.
 
 ---
 
-## 📊 Benchmark Results
+## 📈 Method Comparison & Performance Summary
 
-### Scalar Test Cases
-All methods were benchmarked across 6 non-linear functions (including those from **Table 1** of the paper).
+### 1. Theoretical vs. Empirical Metrics
 
-1. **Newton (Order 2):** Converges in ~5-11 iterations.
-2. **VNM (Order 3):** Converges in ~3-6 iterations.
-3. **Simpson–VNM (Order 4):** Achieves Order 4 convergence with even faster error reduction per iteration.
-4. **Steffensen–VNM (Derivative-Free):** Achieves Order 3 convergence without needing analytical derivatives.
-
-### Multivariate System Benchmark
-Solves the non-linear 2D system $F(x, y) = [x^2 + y^2 - 4, xy - 1]^T = 0$:
-- **Initial Guess:** $X_0 = [1.5, 0.5]^T$
-- **Root Solved:** $X^* = [1.93185165, 0.51763809]^T$
-- **Convergence:** Achieved high precision in **3 iterations** using `scipy.linalg.solve`.
+| Method | Order ($p$) | Derivative Needed? | Formula | Iterations to $10^{-15}$ | NFEV Efficiency |
+|--------|------------|--------------------|---------|--------------------------|-----------------|
+| **Newton–Raphson** | $2.0$ | $f'(x)$ | $x - \frac{f(x)}{f'(x)}$ | 5 – 10 | Baseline (2 eval/iter) |
+| **Weerakoon–Fernando (VNM)** | **$3.0$** | $f'(x)$ | $x - \frac{2f(x)}{f'(x) + f'(y_n)}$ | 3 – 5 | **High** (3 eval/iter) |
+| **Simpson–VNM Upgrade** | **$4.0$** | $f'(x)$ | $x - \frac{6f(x)}{f'(x) + 4f'(z_n) + f'(y_n)}$ | **2 – 4** | **Highest** (4 eval/iter) |
+| **Steffensen–VNM Upgrade** | **$3.0$** | ❌ **No** | Finite difference derivative approx. | 3 – 5 | High (3-4 eval/iter) |
+| **Multivariate VNM System** | **$3.0$** | Jacobian $J(X)$ | $(J(X) + J(Y))\Delta X = 2F(X)$ | **3** | High (2 Jacobian evaluations) |
 
 ---
 
-## 📈 Visualizations
+## 📊 Comparison Visualizations
 
-### 1. Error Convergence Rates (Log Scale)
-![Convergence Comparison](plots/convergence_comparison.png)
+### 1. Error Trajectories (Log Scale)
+Demonstrates the rate of error decay per iteration. Higher-order methods (VNM, Simpson-VNM) drop to machine precision ($10^{-15}$) in significantly fewer iterations.
 
-### 2. Efficiency Comparison (Iterations & NFEV)
+![Convergence Trajectories](plots/convergence_comparison.png)
+
+---
+
+### 2. Efficiency Comparison (Iterations & Function Evaluations)
+Compares total iterations and total function evaluations (NFEVs) needed to reach $10^{-15}$ tolerance across all 6 test functions.
+
 ![Efficiency Summary](plots/efficiency_summary.png)
 
 ---
 
-## 📁 Repository Structure
+### 3. Computational Order of Convergence (COC)
+Plots the empirical order of convergence $p \approx \frac{\ln|e_k/e_{k-1}|}{\ln|e_{k-1}/e_{k-2}|}$ across iterations.
+
+![Computational Order of Convergence](plots/coc_comparison.png)
+
+---
+
+### 4. Multivariate System Trajectory Phase Plane
+Visualizes the convergence trajectory of Multivariate VNM on the non-linear system $F(x,y) = [x^2+y^2-4, xy-1]^T = 0$ starting from $X_0 = [1.5, 0.5]^T$.
+
+![Multivariate System Trajectory](plots/multivariate_trajectory.png)
+
+---
+
+## 📁 Repository Organization
 
 ```text
 CSE-402-Project/
-├── README.md                           # Repository documentation
-├── walkthrough.md                      # Detailed extension report & benchmarks
-├── implementation_plans.md             # Implementation specifications
+├── README.md                           # Main repository documentation
+├── walkthrough.md                      # Complete comparative report
+├── implementation_plans.md             # Specification & code details
 ├── .gitignore                          # Excluded files configuration
 ├── src/
-│   └── weerakoon_fernando.py           # Core implementation of all 5 methods
+│   └── weerakoon_fernando.py           # Core module & benchmark generator
 ├── paper/
-│   ├── A Variant of Newton’s Method...pdf  # Original research paper
-│   ├── extract_pdf.py                  # Text extraction script
+│   ├── A Variant of Newton’s Method...pdf  # Original research paper PDF
+│   ├── extract_pdf.py                  # PDF extraction utility
 │   └── paper_text.txt                  # Extracted paper text
 └── plots/
-    ├── convergence_comparison.png      # Error trajectory plots
-    └── efficiency_summary.png          # Iteration and NFEV comparison
+    ├── convergence_comparison.png      # Error log-scale plots
+    ├── efficiency_summary.png          # Iteration & NFEV bar charts
+    ├── coc_comparison.png              # Order of convergence plots
+    ├── multivariate_trajectory.png     # 2D system phase plane
+    └── root_paths.png                  # Function trajectory plots
 ```

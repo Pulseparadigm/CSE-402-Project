@@ -341,7 +341,12 @@ def run_all_benchmarks():
     print(f"  Iterations      : {ni_sys},  NFEV: {nfev_sys},  COC: {coc_sys:.4f}")
     print("=" * 100)
 
-    return results
+    sys_res = {
+        "X0": X0, "root": root_sys, "history": hist_sys, "errors": errs_sys,
+        "nfev": nfev_sys, "ni": ni_sys, "coc": coc_sys
+    }
+
+    return results, sys_res
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -349,16 +354,16 @@ def run_all_benchmarks():
 # ─────────────────────────────────────────────────────────────────────────────
 
 COLORS = {
-    "nm_line"  : "#4FC3F7",   # light blue
-    "vnm_line" : "#FF8A65",   # orange
-    "simp_line": "#A5D6A7",   # green
+    "nm_line"   : "#4FC3F7",   # light blue
+    "vnm_line"  : "#FF8A65",   # orange
+    "simp_line" : "#A5D6A7",   # green
     "steff_line": "#CE93D8",  # purple
-    "bg"       : "#0D1117",
-    "panel"    : "#161B22",
-    "grid"     : "#21262D",
-    "text"     : "#E6EDF3",
-    "sub"      : "#8B949E",
-    "accent"   : "#58A6FF",
+    "bg"        : "#0D1117",
+    "panel"     : "#161B22",
+    "grid"      : "#21262D",
+    "text"      : "#E6EDF3",
+    "sub"       : "#8B949E",
+    "accent"    : "#58A6FF",
 }
 
 plt.rcParams.update({
@@ -383,11 +388,18 @@ def get_plot_dir():
     return plot_dir
 
 
-def generate_plots(results):
+def generate_plots(results, sys_res):
     plot_dir = get_plot_dir()
     n = len(results)
     cols = 3
     rows = math.ceil(n / cols)
+
+    color_map = {
+        "Newton (Order 2)": COLORS["nm_line"],
+        "VNM (Order 3)": COLORS["vnm_line"],
+        "Simpson (Order 4)": COLORS["simp_line"],
+        "Steffensen (No-df)": COLORS["steff_line"],
+    }
 
     # 1. Convergence Comparison
     fig, axes = plt.subplots(rows, cols, figsize=(18, rows * 4))
@@ -396,13 +408,6 @@ def generate_plots(results):
         "NM (Ord 2)  ·  VNM (Ord 3)  ·  Simpson-VNM (Ord 4)  ·  Steffensen-VNM (Ord 3)",
         fontsize=14, fontweight="bold", color=COLORS["text"], y=1.01
     )
-
-    color_map = {
-        "Newton (Order 2)": COLORS["nm_line"],
-        "VNM (Order 3)": COLORS["vnm_line"],
-        "Simpson (Order 4)": COLORS["simp_line"],
-        "Steffensen (No-df)": COLORS["steff_line"],
-    }
 
     for idx, res in enumerate(results):
         ax = axes.flat[idx]
@@ -466,6 +471,88 @@ def generate_plots(results):
     print(f"[✓] Saved: {out2}")
     plt.close()
 
+    # 3. Computational Order of Convergence (COC) per Iteration
+    fig, axes = plt.subplots(rows, cols, figsize=(18, rows * 4))
+    fig.suptitle(
+        "Computational Order of Convergence (COC) per Iteration\n"
+        "NM ≈ 2  ·  VNM ≈ 3  ·  Simpson-VNM ≈ 4  ·  Steffensen-VNM ≈ 3",
+        fontsize=14, fontweight="bold", color=COLORS["text"], y=1.01
+    )
+
+    for idx, res in enumerate(results):
+        ax = axes.flat[idx]
+        tc = res["tc"]
+
+        for m_name, run_data in res["runs"].items():
+            errors = run_data[2]
+            coc_vals = []
+            for k in range(2, len(errors)):
+                e2, e1, e0 = errors[k-2], errors[k-1], errors[k]
+                if e2 > 0 and e1 > 0 and e0 > 0:
+                    try:
+                        p = math.log(e0 / e1) / math.log(e1 / e2)
+                        coc_vals.append(p)
+                    except Exception:
+                        pass
+            if coc_vals:
+                ax.plot(range(1, len(coc_vals) + 1), coc_vals, "o-",
+                        color=color_map[m_name], label=f"{m_name}", linewidth=2, markersize=4)
+
+        ax.axhline(2, color=COLORS["nm_line"],  linestyle="--", alpha=0.4, label="Order 2")
+        ax.axhline(3, color=COLORS["vnm_line"], linestyle="--", alpha=0.4, label="Order 3")
+        ax.axhline(4, color=COLORS["simp_line"],linestyle="--", alpha=0.4, label="Order 4")
+
+        ax.set_title(tc["name"], fontsize=11, pad=8)
+        ax.set_xlabel("Iteration", fontsize=9)
+        ax.set_ylabel("COC (p)", fontsize=9)
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+        ax.set_ylim(0, 5.5)
+        ax.grid(True, linestyle="--", alpha=0.4)
+        ax.legend(fontsize=7, loc="upper right")
+
+    for idx in range(len(results), rows * cols):
+        axes.flat[idx].set_visible(False)
+
+    plt.tight_layout()
+    out3 = os.path.join(plot_dir, "coc_comparison.png")
+    plt.savefig(out3, dpi=150, bbox_inches="tight", facecolor=COLORS["bg"])
+    print(f"[✓] Saved: {out3}")
+    plt.close()
+
+    # 4. Multivariate System Trajectory Plot
+    fig, ax = plt.subplots(figsize=(8, 6))
+    fig.patch.set_facecolor(COLORS["bg"])
+    ax.set_facecolor(COLORS["panel"])
+
+    x_vals = np.linspace(0.5, 2.5, 300)
+    y_vals = np.linspace(0.1, 2.0, 300)
+    X_grid, Y_grid = np.meshgrid(x_vals, y_vals)
+
+    Z1 = X_grid**2 + Y_grid**2 - 4.0
+    Z2 = X_grid * Y_grid - 1.0
+
+    ax.contour(X_grid, Y_grid, Z1, levels=[0], colors=COLORS["nm_line"], linewidths=2)
+    ax.contour(X_grid, Y_grid, Z2, levels=[0], colors=COLORS["vnm_line"], linewidths=2)
+
+    hist_arr = np.array(sys_res["history"])
+    ax.plot(hist_arr[:, 0], hist_arr[:, 1], "ro-", linewidth=2.5, markersize=8,
+            label="Multivariate VNM Trajectory", zorder=5)
+
+    ax.scatter([sys_res["X0"][0]], [sys_res["X0"][1]], color=COLORS["steff_line"], s=100, zorder=6, label="Start X0")
+    ax.scatter([sys_res["root"][0]], [sys_res["root"][1]], color="#56d364", s=120, marker="*", zorder=6, label=f"Root X*")
+
+    ax.set_title("Multivariate VNM Trajectory on F(x, y) = [x²+y²-4, xy-1]^T", fontweight="bold")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.legend(loc="upper right")
+    ax.grid(True, linestyle="--", alpha=0.4)
+
+    plt.tight_layout()
+    out4 = os.path.join(plot_dir, "multivariate_trajectory.png")
+    plt.savefig(out4, dpi=150, bbox_inches="tight", facecolor=COLORS["bg"])
+    print(f"[✓] Saved: {out4}")
+    plt.close()
+
 
 def main():
     print("\n" + "=" * 100)
@@ -473,12 +560,16 @@ def main():
     print("  Weerakoon & Fernando (2000) with Order 4 Simpson & Steffensen Upgrades")
     print("=" * 100 + "\n")
 
-    results = run_all_benchmarks()
+    results, sys_res = run_all_benchmarks()
     print("\n[→] Generating updated performance plots...")
-    generate_plots(results)
+    generate_plots(results, sys_res)
 
     print("\n" + "=" * 100)
-    print("  All benchmark suites completed and plots saved in /plots directory!")
+    print("  All benchmark suites completed and 4 plots saved in /plots directory!")
+    print("  1. convergence_comparison.png  - Semi-log error trajectories")
+    print("  2. efficiency_summary.png      - Iterations & NFEV bar charts")
+    print("  3. coc_comparison.png          - Computational Order of Convergence")
+    print("  4. multivariate_trajectory.png - 2D System trajectory phase plane")
     print("=" * 100 + "\n")
 
 
