@@ -1,125 +1,233 @@
 """
 =============================================================================
-A Variant of Newton's Method with Accelerated Third-Order Convergence
+Upgraded Weerakoon-Fernando Method (VNM) & Extensions
 -----------------------------------------------------------------------------
-Implementation of the Weerakoon-Fernando method (2000), Published in
-Applied Mathematics Letters, 13(8), pp. 87-93.
+Implementation of the Weerakoon-Fernando method (2000) and its modern
+upgrades:
+1. Classical Newton-Raphson (Order 2)
+2. Weerakoon-Fernando VNM (Trapezoidal, Order 3)
+3. Simpson-type VNM (Simpson 1/3 Rule, Order 4)
+4. Steffensen-type VNM (Derivative-Free, Order 3)
+5. Multivariate System VNM (Systems of Nonlinear Equations F(X) = 0)
 
 Authors of Paper: S. Weerakoon and T. G. I. Fernando
-Implementation:   Python
-
-Method (VNM):
-  Given x_n, compute:
-    y_n     = x_n - f(x_n) / f'(x_n)         [Newton predictor step]
-    x_{n+1} = x_n - 2*f(x_n) / (f'(x_n) + f'(y_n))   [corrector step]
-
-This achieves third-order (cubic) convergence without needing f''(x).
+Refined Implementation: Python / NumPy / SciPy
 =============================================================================
 """
 
+import os
 import math
 import numpy as np
+import scipy.linalg as la
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 from matplotlib.ticker import MaxNLocator
 import warnings
 
 warnings.filterwarnings("ignore")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CORE METHODS
+# 1. CORE & UPGRADED METHODS
 # ─────────────────────────────────────────────────────────────────────────────
 
-def newton_method(f, df, x0, tol=1e-15, max_iter=200):
-    """
-    Classical Newton-Raphson method (second-order convergence).
-    x_{n+1} = x_n - f(x_n) / f'(x_n)
-    """
-    x = x0
+def newton_method(f, df, x0, tol=1e-15, max_iter=100):
+    """Classical Newton-Raphson method (Quadratic Convergence, Order 2)."""
+    x = float(x0)
     history = [x]
-    errors  = []
-    nfev    = 0   # number of function evaluations
-
-    for i in range(max_iter):
-        fx  = f(x);  nfev += 1
-        dfx = df(x); nfev += 1
-
-        if abs(dfx) < 1e-300:
-            return None, history, errors, nfev, i + 1  # derivative vanished
-
-        x_new = x - fx / dfx
-        history.append(x_new)
-        errors.append(abs(x_new - x))
-
-        if abs(x_new - x) < tol and abs(fx) < tol:
-            return x_new, history, errors, nfev, i + 1
-
-        x = x_new
-
+    errors = []
+    nfev = 0
+    for i in range(1, max_iter + 1):
+        fx = f(x)
+        dfx = df(x)
+        nfev += 2
+        
+        if abs(dfx) < 1e-14:
+            raise ValueError("Derivative near zero.")
+            
+        x_next = x - fx / dfx
+        history.append(x_next)
+        err = abs(x_next - x)
+        errors.append(err)
+        
+        if err < tol or abs(f(x_next)) < tol:
+            return x_next, history, errors, nfev, i
+        x = x_next
+        
     return x, history, errors, nfev, max_iter
 
 
-def vnm(f, df, x0, tol=1e-15, max_iter=200):
-    """
-    Weerakoon-Fernando Variant of Newton's Method (VNM) — third-order convergence.
-
-    Predictor:  y_n     = x_n - f(x_n) / f'(x_n)
-    Corrector:  x_{n+1} = x_n - 2*f(x_n) / (f'(x_n) + f'(y_n))
-    """
-    x = x0
+def vnm(f, df, x0, tol=1e-15, max_iter=100):
+    """Base Weerakoon-Fernando Method (Trapezoidal Rule, Order 3)."""
+    x = float(x0)
     history = [x]
-    errors  = []
-    nfev    = 0
-
-    for i in range(max_iter):
-        fx  = f(x);  nfev += 1
-        dfx = df(x); nfev += 1
-
-        if abs(dfx) < 1e-300:
-            return None, history, errors, nfev, i + 1
-
-        # Predictor step (Newton)
-        y    = x - fx / dfx
-
-        # Corrector step (VNM)
-        dfy  = df(y);  nfev += 1
-        denom = dfx + dfy
-        if abs(denom) < 1e-300:
-            return None, history, errors, nfev, i + 1
-
-        x_new = x - 2.0 * fx / denom
-        history.append(x_new)
-        errors.append(abs(x_new - x))
-
-        if abs(x_new - x) < tol and abs(f(x_new)) < tol:
-            nfev += 1
-            return x_new, history, errors, nfev, i + 1
-
-        x = x_new
-
+    errors = []
+    nfev = 0
+    for i in range(1, max_iter + 1):
+        fx = f(x)
+        dfx = df(x)
+        nfev += 2
+        
+        if abs(dfx) < 1e-14:
+            raise ValueError("Derivative near zero.")
+            
+        yn = x - fx / dfx
+        df_yn = df(yn)
+        nfev += 1
+        
+        denom = dfx + df_yn
+        if abs(denom) < 1e-14:
+            raise ValueError("Denominator near zero.")
+            
+        x_next = x - (2.0 * fx) / denom
+        history.append(x_next)
+        err = abs(x_next - x)
+        errors.append(err)
+        
+        if err < tol or abs(f(x_next)) < tol:
+            return x_next, history, errors, nfev, i
+        x = x_next
+        
     return x, history, errors, nfev, max_iter
 
 
-def computational_order_of_convergence(errors):
+def simpson_vnm(f, df, x0, tol=1e-15, max_iter=100):
     """
-    Estimate the computational order of convergence (COC):
-      COC ≈ log(|e_{n+1}| / |e_n|) / log(|e_n| / |e_{n-1}|)
+    Simpson-type Quadrature Upgrade (Order 4 Convergence).
+    Uses midpoint z_n = (x_n + y_n) / 2 to evaluate Simpson's 1/3 Rule.
     """
-    coc_vals = []
-    for k in range(2, len(errors)):
-        e_prev2 = errors[k - 2]
-        e_prev1 = errors[k - 1]
-        e_cur   = errors[k]
-        if e_prev2 > 0 and e_prev1 > 0 and e_cur > 0:
-            num   = math.log(abs(e_cur   / e_prev1) + 1e-300)
-            denom = math.log(abs(e_prev1 / e_prev2) + 1e-300)
-            if abs(denom) > 1e-10:
-                coc_vals.append(num / denom)
-    return coc_vals[-1] if coc_vals else float("nan")
+    x = float(x0)
+    history = [x]
+    errors = []
+    nfev = 0
+    for i in range(1, max_iter + 1):
+        fx = f(x)
+        dfx = df(x)
+        nfev += 2
+        
+        if abs(dfx) < 1e-14:
+            raise ValueError("Derivative near zero.")
+            
+        yn = x - fx / dfx
+        zn = 0.5 * (x + yn)
+        
+        df_zn = df(zn)
+        df_yn = df(yn)
+        nfev += 2
+        
+        denom = dfx + 4.0 * df_zn + df_yn
+        if abs(denom) < 1e-14:
+            raise ValueError("Denominator near zero.")
+            
+        x_next = x - (6.0 * fx) / denom
+        history.append(x_next)
+        err = abs(x_next - x)
+        errors.append(err)
+        
+        if err < tol or abs(f(x_next)) < tol:
+            return x_next, history, errors, nfev, i
+        x = x_next
+        
+    return x, history, errors, nfev, max_iter
+
+
+def steffensen_vnm(f, x0, tol=1e-15, max_iter=100):
+    """
+    Derivative-Free Weerakoon-Fernando Variant (Order 3 Convergence).
+    Replaces d/dx with forward finite differences.
+    """
+    x = float(x0)
+    history = [x]
+    errors = []
+    nfev = 0
+    for i in range(1, max_iter + 1):
+        fx = f(x)
+        nfev += 1
+        
+        if abs(fx) < tol:
+            return x, history, errors, nfev, i - 1
+            
+        fx_plus = f(x + fx)
+        nfev += 1
+        dfx_approx = (fx_plus - fx) / fx
+        
+        if abs(dfx_approx) < 1e-14:
+            raise ValueError("Approximated derivative near zero.")
+            
+        yn = x - fx / dfx_approx
+        f_yn = f(yn)
+        nfev += 1
+        
+        df_yn_approx = (f(yn + f_yn) - f_yn) / f_yn if abs(f_yn) > 1e-15 else dfx_approx
+        nfev += (1 if abs(f_yn) > 1e-15 else 0)
+        
+        denom = dfx_approx + df_yn_approx
+        if abs(denom) < 1e-14:
+            raise ValueError("Denominator near zero.")
+            
+        x_next = x - (2.0 * fx) / denom
+        history.append(x_next)
+        err = abs(x_next - x)
+        errors.append(err)
+        
+        if err < tol or abs(f(x_next)) < tol:
+            return x_next, history, errors, nfev, i
+        x = x_next
+        
+    return x, history, errors, nfev, max_iter
+
+
+def vnm_system(F, J, X0, tol=1e-12, max_iter=100):
+    """
+    Multivariate Extension of VNM for Systems of Nonlinear Equations F(X) = 0.
+    Uses scipy.linalg.solve instead of explicit matrix inversion.
+    """
+    X = np.array(X0, dtype=float)
+    history = [X.copy()]
+    errors = []
+    nfev = 0
+    
+    for i in range(1, max_iter + 1):
+        FX = F(X)
+        JX = J(X)
+        nfev += 1
+        
+        delta_y = la.solve(JX, FX)
+        Y = X - delta_y
+        
+        JY = J(Y)
+        nfev += 1
+        
+        J_sum = JX + JY
+        delta_x = la.solve(J_sum, 2.0 * FX)
+        
+        X_next = X - delta_x
+        history.append(X_next.copy())
+        err = la.norm(X_next - X, ord=2)
+        errors.append(err)
+        
+        if err < tol or la.norm(F(X_next), ord=2) < tol:
+            return X_next, history, errors, nfev, i
+        X = X_next
+        
+    return X, history, errors, nfev, max_iter
+
+
+def compute_coc(errors):
+    """Calculates Computational Order of Convergence (p) from consecutive errors."""
+    if len(errors) < 3:
+        return float("nan")
+    e_k  = errors[-1]
+    e_k1 = errors[-2]
+    e_k2 = errors[-3]
+    if e_k1 == 0 or e_k2 == 0 or e_k == 0:
+        return float("nan")
+    try:
+        return np.log(abs(e_k / e_k1)) / np.log(abs(e_k1 / e_k2))
+    except Exception:
+        return float("nan")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TEST FUNCTIONS   (matching Table 1 in the paper)
+# 2. TEST FUNCTIONS & MULTIVARIATE SYSTEM BENCHMARKS
 # ─────────────────────────────────────────────────────────────────────────────
 
 TEST_CASES = [
@@ -173,56 +281,84 @@ TEST_CASES = [
     },
 ]
 
+# 2D System:
+# F1(x, y) = x^2 + y^2 - 4 = 0
+# F2(x, y) = x*y - 1 = 0
+def system_F(X):
+    x, y = X[0], X[1]
+    return np.array([x**2 + y**2 - 4.0, x*y - 1.0])
+
+def system_J(X):
+    x, y = X[0], X[1]
+    return np.array([
+        [2.0*x, 2.0*y],
+        [y,     x]
+    ])
+
 
 # ─────────────────────────────────────────────────────────────────────────────
-# RUN ALL TESTS
+# 3. BENCHMARK RUNNER
 # ─────────────────────────────────────────────────────────────────────────────
 
-def run_all_tests():
+def run_all_benchmarks():
+    print("=" * 100)
+    print(f"{'Function':<25} {'Method':<14} {'Iter':>5} {'NFEV':>6}  {'COC':>7}  {'Root'}")
+    print("=" * 100)
+
     results = []
-    print("=" * 90)
-    print(f"{'Function':<30} {'Method':<6} {'Iter':>5} {'NFEV':>6}  {'COC':>7}  {'Root'}")
-    print("=" * 90)
+    methods = [
+        ("Newton (Order 2)", lambda f, df, x0: newton_method(f, df, x0)),
+        ("VNM (Order 3)",    lambda f, df, x0: vnm(f, df, x0)),
+        ("Simpson (Order 4)",lambda f, df, x0: simpson_vnm(f, df, x0)),
+        ("Steffensen (No-df)",lambda f, df, x0: steffensen_vnm(f, x0)),
+    ]
 
     for tc in TEST_CASES:
-        f, df, x0, true_root = tc["f"], tc["df"], tc["x0"], tc["root"]
+        f, df, x0 = tc["f"], tc["df"], tc["x0"]
+        tc_res = {"tc": tc, "runs": {}}
 
-        # Newton's Method
-        r_nm, h_nm, e_nm, nfev_nm, ni_nm = newton_method(f, df, x0)
-        coc_nm = computational_order_of_convergence(e_nm)
+        for m_name, m_func in methods:
+            try:
+                root, history, errors, nfev, ni = m_func(f, df, x0)
+                coc = compute_coc(errors)
+                tc_res["runs"][m_name] = (root, history, errors, nfev, ni, coc)
+                print(f"{tc['label']:<25} {m_name:<14} {ni:>5} {nfev:>6}  {coc:>7.4f}  {root:.15f}")
+            except Exception as e:
+                print(f"{tc['label']:<25} {m_name:<14} ERROR: {e}")
 
-        # Variant of Newton's Method
-        r_vn, h_vn, e_vn, nfev_vn, ni_vn = vnm(f, df, x0)
-        coc_vn = computational_order_of_convergence(e_vn)
+        print("-" * 100)
+        results.append(tc_res)
 
-        print(f"{tc['label']:<30} {'NM':<6} {ni_nm:>5} {nfev_nm:>6}  {coc_nm:>7.4f}  {r_nm:.15f}")
-        print(f"{'':<30} {'VNM':<6} {ni_vn:>5} {nfev_vn:>6}  {coc_vn:>7.4f}  {r_vn:.15f}")
-        print("-" * 90)
-
-        results.append({
-            "tc"    : tc,
-            "nm"    : (r_nm, h_nm, e_nm, nfev_nm, ni_nm, coc_nm),
-            "vnm"   : (r_vn, h_vn, e_vn, nfev_vn, ni_vn, coc_vn),
-        })
+    # System benchmark
+    print("\n" + "=" * 100)
+    print("  MULTIVARIATE SYSTEM VNM BENCHMARK: F(x, y) = [x² + y² - 4, xy - 1]^T")
+    print("=" * 100)
+    X0 = [1.5, 0.5]
+    root_sys, hist_sys, errs_sys, nfev_sys, ni_sys = vnm_system(system_F, system_J, X0)
+    coc_sys = compute_coc(errs_sys)
+    print(f"  Initial Guess X0: {X0}")
+    print(f"  Solved Root X*  : [{root_sys[0]:.15f}, {root_sys[1]:.15f}]")
+    print(f"  Iterations      : {ni_sys},  NFEV: {nfev_sys},  COC: {coc_sys:.4f}")
+    print("=" * 100)
 
     return results
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# VISUALISATION
+# 4. PLOTTING & VISUALIZATION
 # ─────────────────────────────────────────────────────────────────────────────
 
 COLORS = {
-    "nm_line" : "#4FC3F7",   # light blue
-    "vnm_line": "#FF8A65",   # orange
-    "nm_mark" : "#0288D1",
-    "vnm_mark": "#E64A19",
-    "bg"      : "#0D1117",
-    "panel"   : "#161B22",
-    "grid"    : "#21262D",
-    "text"    : "#E6EDF3",
-    "sub"     : "#8B949E",
-    "accent"  : "#58A6FF",
+    "nm_line"  : "#4FC3F7",   # light blue
+    "vnm_line" : "#FF8A65",   # orange
+    "simp_line": "#A5D6A7",   # green
+    "steff_line": "#CE93D8",  # purple
+    "bg"       : "#0D1117",
+    "panel"    : "#161B22",
+    "grid"     : "#21262D",
+    "text"     : "#E6EDF3",
+    "sub"      : "#8B949E",
+    "accent"   : "#58A6FF",
 }
 
 plt.rcParams.update({
@@ -241,301 +377,109 @@ plt.rcParams.update({
     "font.size"         : 10,
 })
 
+def get_plot_dir():
+    plot_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "plots"))
+    os.makedirs(plot_dir, exist_ok=True)
+    return plot_dir
 
-def plot_convergence(results):
-    """Plot error vs iteration for each test function."""
+
+def generate_plots(results):
+    plot_dir = get_plot_dir()
     n = len(results)
     cols = 3
     rows = math.ceil(n / cols)
 
+    # 1. Convergence Comparison
     fig, axes = plt.subplots(rows, cols, figsize=(18, rows * 4))
     fig.suptitle(
-        "Convergence Comparison: Newton's Method vs Weerakoon-Fernando VNM\n"
-        "S. Weerakoon & T.G.I. Fernando — Applied Mathematics Letters (2000)",
+        "Convergence Comparison Across All Newton Variants\n"
+        "NM (Ord 2)  ·  VNM (Ord 3)  ·  Simpson-VNM (Ord 4)  ·  Steffensen-VNM (Ord 3)",
         fontsize=14, fontweight="bold", color=COLORS["text"], y=1.01
     )
 
+    color_map = {
+        "Newton (Order 2)": COLORS["nm_line"],
+        "VNM (Order 3)": COLORS["vnm_line"],
+        "Simpson (Order 4)": COLORS["simp_line"],
+        "Steffensen (No-df)": COLORS["steff_line"],
+    }
+
     for idx, res in enumerate(results):
-        ax  = axes.flat[idx]
-        tc  = res["tc"]
-        e_nm  = res["nm"][2]
-        e_vn  = res["vnm"][2]
+        ax = axes.flat[idx]
+        tc = res["tc"]
 
-        xs_nm = list(range(1, len(e_nm) + 1))
-        xs_vn = list(range(1, len(e_vn) + 1))
-
-        # Filter out zeros for log scale
-        def safe_log(lst):
-            return [max(e, 1e-17) for e in lst]
-
-        ax.semilogy(xs_nm, safe_log(e_nm), "o-", color=COLORS["nm_line"],
-                    label=f"Newton (NM) — {res['nm'][4]} iter",
-                    linewidth=2, markersize=5, markerfacecolor=COLORS["nm_mark"])
-        ax.semilogy(xs_vn, safe_log(e_vn), "s-", color=COLORS["vnm_line"],
-                    label=f"VNM — {res['vnm'][4]} iter",
-                    linewidth=2, markersize=5, markerfacecolor=COLORS["vnm_mark"])
+        for m_name, run_data in res["runs"].items():
+            errors = run_data[2]
+            xs = list(range(1, len(errors) + 1))
+            safe_errs = [max(e, 1e-17) for e in errors]
+            ax.semilogy(xs, safe_errs, "o-", color=color_map[m_name],
+                        label=f"{m_name} ({run_data[4]} it)", linewidth=2, markersize=4)
 
         ax.set_title(tc["name"], fontsize=11, pad=8)
         ax.set_xlabel("Iteration", fontsize=9)
-        ax.set_ylabel("Absolute Error  |xₙ₊₁ − xₙ|", fontsize=9)
+        ax.set_ylabel("Absolute Error |xₙ₊₁ - xₙ|", fontsize=9)
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         ax.grid(True, linestyle="--", alpha=0.4)
-        ax.legend(fontsize=8, loc="upper right")
-        ax.set_facecolor(COLORS["panel"])
+        ax.legend(fontsize=7, loc="upper right")
 
-    # Hide unused axes
     for idx in range(len(results), rows * cols):
         axes.flat[idx].set_visible(False)
 
-    import os
-    plot_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "plots"))
-    os.makedirs(plot_dir, exist_ok=True)
-    out_path = os.path.join(plot_dir, "convergence_comparison.png")
-
     plt.tight_layout()
-    plt.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=COLORS["bg"])
-    print(f"\n[✓] Saved: {out_path}")
+    out1 = os.path.join(plot_dir, "convergence_comparison.png")
+    plt.savefig(out1, dpi=150, bbox_inches="tight", facecolor=COLORS["bg"])
+    print(f"[✓] Saved: {out1}")
     plt.close()
 
-
-def plot_summary_bar(results):
-    """Bar chart: iterations and NFEV comparison."""
-    labels    = [r["tc"]["label"] for r in results]
-    nm_iters  = [r["nm"][4]  for r in results]
-    vn_iters  = [r["vnm"][4] for r in results]
-    nm_nfev   = [r["nm"][3]  for r in results]
-    vn_nfev   = [r["vnm"][3] for r in results]
-
-    x    = np.arange(len(labels))
-    w    = 0.35
+    # 2. Efficiency Bar Chart
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 5))
     fig.patch.set_facecolor(COLORS["bg"])
+    labels = [r["tc"]["label"] for r in results]
+    x = np.arange(len(labels))
+    w = 0.2
 
-    for ax, nm_vals, vn_vals, ylabel, title in [
-        (ax1, nm_iters, vn_iters, "Iterations", "Number of Iterations to Converge"),
-        (ax2, nm_nfev,  vn_nfev,  "Function Evaluations", "Total Function Evaluations (NFEV)"),
+    m_keys = ["Newton (Order 2)", "VNM (Order 3)", "Simpson (Order 4)", "Steffensen (No-df)"]
+    offsets = [-1.5*w, -0.5*w, 0.5*w, 1.5*w]
+
+    for ax, metric_idx, ylabel, title in [
+        (ax1, 4, "Iterations to Converge", "Iteration Count Comparison"),
+        (ax2, 3, "Total Function Evaluations (NFEV)", "Function Evaluations (NFEV)"),
     ]:
         ax.set_facecolor(COLORS["panel"])
-        b1 = ax.bar(x - w/2, nm_vals, w, label="Newton (NM)",
-                    color=COLORS["nm_line"], alpha=0.85, edgecolor=COLORS["nm_mark"])
-        b2 = ax.bar(x + w/2, vn_vals, w, label="VNM",
-                    color=COLORS["vnm_line"], alpha=0.85, edgecolor=COLORS["vnm_mark"])
-
-        ax.bar_label(b1, padding=3, fontsize=9, color=COLORS["text"])
-        ax.bar_label(b2, padding=3, fontsize=9, color=COLORS["text"])
+        for k_idx, m_name in enumerate(m_keys):
+            vals = [r["runs"][m_name][metric_idx] for r in results]
+            bars = ax.bar(x + offsets[k_idx], vals, w, label=m_name,
+                          color=color_map[m_name], alpha=0.85)
+            ax.bar_label(bars, padding=2, fontsize=7, color=COLORS["text"])
 
         ax.set_xticks(x)
         ax.set_xticklabels(labels, rotation=25, ha="right", fontsize=8)
         ax.set_ylabel(ylabel)
         ax.set_title(title, fontweight="bold")
-        ax.legend()
-        ax.grid(axis="y", linestyle="--", alpha=0.4)
-        ax.spines[["top", "right"]].set_visible(False)
-
-    fig.suptitle(
-        "Efficiency Summary: Newton's Method vs Weerakoon-Fernando VNM",
-        fontsize=13, fontweight="bold", color=COLORS["text"]
-    )
-    import os
-    plot_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "plots"))
-    out_path = os.path.join(plot_dir, "efficiency_summary.png")
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=COLORS["bg"])
-    print(f"[✓] Saved: {out_path}")
-    plt.close()
-
-
-def plot_function_roots(results):
-    """Visualise each function and show Newton vs VNM iteration paths."""
-    n = len(results)
-    cols = 3
-    rows = math.ceil(n / cols)
-
-    fig, axes = plt.subplots(rows, cols, figsize=(18, rows * 4))
-    fig.suptitle("Root-Finding Paths: Newton's Method vs VNM",
-                 fontsize=14, fontweight="bold", color=COLORS["text"], y=1.01)
-
-    for idx, res in enumerate(results):
-        ax  = axes.flat[idx]
-        tc  = res["tc"]
-        f   = tc["f"]
-        root = tc["root"]
-
-        h_nm = res["nm"][1]
-        h_vn = res["vnm"][1]
-
-        # x range for plotting
-        all_x = h_nm + h_vn
-        xmin  = min(all_x)
-        xmax  = max(all_x)
-        margin = max(abs(xmax - xmin) * 0.3, 0.5)
-        xlo, xhi = xmin - margin, xmax + margin
-
-        xs = np.linspace(xlo, xhi, 600)
-        try:
-            ys = [f(xi) for xi in xs]
-        except Exception:
-            ys = [0] * len(xs)
-
-        ax.plot(xs, ys, color=COLORS["accent"], linewidth=2, label=tc["name"], zorder=2)
-        ax.axhline(0, color=COLORS["sub"], linewidth=0.8, linestyle="--")
-        ax.axvline(root, color="#56d364", linewidth=1.2, linestyle=":", label=f"Root ≈ {root:.6f}")
-
-        # Plot iteration x-points on the x-axis
-        ys_nm = np.zeros(len(h_nm))
-        ys_vn = np.zeros(len(h_vn))
-        ax.scatter(h_nm, ys_nm, color=COLORS["nm_mark"], s=40, zorder=5, label="NM iterates")
-        ax.scatter(h_vn, ys_vn, color=COLORS["vnm_mark"], s=40, marker="D", zorder=5, label="VNM iterates")
-
-        ax.set_title(tc["name"], fontsize=11, pad=8)
-        ax.set_xlabel("x", fontsize=9)
-        ax.set_ylabel("f(x)", fontsize=9)
-        ax.legend(fontsize=7, loc="upper right")
-        ax.grid(True, linestyle="--", alpha=0.3)
-        ax.set_facecolor(COLORS["panel"])
-
-        # Clip y-axis for readability
-        valid_ys = [y for y in ys if not math.isnan(y) and not math.isinf(y)]
-        if valid_ys:
-            ylo = min(valid_ys)
-            yhi = max(valid_ys)
-            pad = (yhi - ylo) * 0.1 + 0.5
-            ax.set_ylim(ylo - pad, yhi + pad)
-
-    for idx in range(len(results), rows * cols):
-        axes.flat[idx].set_visible(False)
-
-    import os
-    plot_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "plots"))
-    out_path = os.path.join(plot_dir, "root_paths.png")
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=COLORS["bg"])
-    print(f"[✓] Saved: {out_path}")
-    plt.close()
-
-
-def plot_coc_comparison(results):
-    """Plot computational order of convergence per iteration."""
-    n = len(results)
-    cols = 3
-    rows = math.ceil(n / cols)
-
-    fig, axes = plt.subplots(rows, cols, figsize=(18, rows * 4))
-    fig.suptitle(
-        "Computational Order of Convergence (COC) per Iteration\n"
-        "NM ≈ 2 (quadratic)  ·  VNM ≈ 3 (cubic)",
-        fontsize=14, fontweight="bold", color=COLORS["text"], y=1.01
-    )
-
-    for idx, res in enumerate(results):
-        ax   = axes.flat[idx]
-        tc   = res["tc"]
-        e_nm = res["nm"][2]
-        e_vn = res["vnm"][2]
-
-        def coc_series(errors):
-            series = []
-            for k in range(2, len(errors)):
-                e2, e1, e0 = errors[k-2], errors[k-1], errors[k]
-                if e2 > 0 and e1 > 0 and e0 > 0:
-                    num   = math.log(max(e0 / e1, 1e-300))
-                    denom = math.log(max(e1 / e2, 1e-300))
-                    if abs(denom) > 1e-10:
-                        series.append(num / denom)
-            return series
-
-        coc_nm = coc_series(e_nm)
-        coc_vn = coc_series(e_vn)
-
-        if coc_nm:
-            ax.plot(range(1, len(coc_nm) + 1), coc_nm, "o-", color=COLORS["nm_line"],
-                    label="NM COC", linewidth=2, markersize=5)
-        if coc_vn:
-            ax.plot(range(1, len(coc_vn) + 1), coc_vn, "s-", color=COLORS["vnm_line"],
-                    label="VNM COC", linewidth=2, markersize=5)
-
-        ax.axhline(2, color=COLORS["nm_mark"],  linestyle="--", alpha=0.5, label="Order 2")
-        ax.axhline(3, color=COLORS["vnm_mark"], linestyle="--", alpha=0.5, label="Order 3")
-
-        ax.set_title(tc["name"], fontsize=11, pad=8)
-        ax.set_xlabel("Iteration", fontsize=9)
-        ax.set_ylabel("COC", fontsize=9)
-        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-        ax.set_ylim(0, 5)
         ax.legend(fontsize=8)
-        ax.grid(True, linestyle="--", alpha=0.4)
-        ax.set_facecolor(COLORS["panel"])
+        ax.grid(axis="y", linestyle="--", alpha=0.4)
 
-    for idx in range(len(results), rows * cols):
-        axes.flat[idx].set_visible(False)
-
-    import os
-    plot_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "plots"))
-    out_path = os.path.join(plot_dir, "coc_comparison.png")
+    fig.suptitle("Efficiency Summary Across Upgraded Variants", fontsize=13, fontweight="bold")
     plt.tight_layout()
-    plt.savefig(out_path, dpi=150, bbox_inches="tight", facecolor=COLORS["bg"])
-    print(f"[✓] Saved: {out_path}")
+    out2 = os.path.join(plot_dir, "efficiency_summary.png")
+    plt.savefig(out2, dpi=150, bbox_inches="tight", facecolor=COLORS["bg"])
+    print(f"[✓] Saved: {out2}")
     plt.close()
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# =============================================================================
-# INTERACTIVE DEMO
-# =============================================================================
-
-def demo_single(f_str, f, df, x0, true_root=None):
-    """Run both methods on a single function and print a detailed trace."""
-    print(f"\n{'='*70}")
-    print(f"  Function : {f_str}")
-    print(f"  x0       : {x0}")
-    if true_root is not None:
-        print(f"  True root: {true_root:.15f}")
-    print(f"{'='*70}")
-
-    for name, method in [("Newton's Method (NM)", newton_method),
-                          ("Variant of Newton's Method (VNM)", vnm)]:
-        root, history, errors, nfev, ni = method(f, df, x0)
-        print(f"\n  >> {name}")
-        print(f"    {'n':>3}  {'x_n':>22}  {'|x_{n+1}-x_n|':>18}")
-        print(f"    {'-'*3}  {'-'*22}  {'-'*18}")
-        for k, (xk, ek) in enumerate(zip(history[1:], errors)):
-            print(f"    {k+1:>3}  {xk:>22.15f}  {ek:>18.6e}")
-        coc = computational_order_of_convergence(errors)
-        print(f"\n    Root  ~ {root:.15f}")
-        print(f"    Iterations : {ni},  NFEV : {nfev},  COC ~ {coc:.4f}")
-
-
-# =============================================================================
-# MAIN
-# =============================================================================
 
 def main():
-    print("\n" + "=" * 90)
-    print("  A Variant of Newton's Method with Accelerated Third-Order Convergence")
-    print("  Weerakoon & Fernando (2000) - Applied Mathematics Letters 13(8):87-93")
-    print("=" * 90)
+    print("\n" + "=" * 100)
+    print("  UPGRADED WEERAKOON-FERNANDO METHOD (VNM) & EXTENSIONS BENCHMARK SUITE")
+    print("  Weerakoon & Fernando (2000) with Order 4 Simpson & Steffensen Upgrades")
+    print("=" * 100 + "\n")
 
-    # ── 1. Run all paper test cases ──────────────────────────────────────────
-    results = run_all_tests()
+    results = run_all_benchmarks()
+    print("\n[→] Generating updated performance plots...")
+    generate_plots(results)
 
-    # ── 2. Detailed trace for first two cases (like Table 1 in paper) ───────
-    for tc in TEST_CASES[:2]:
-        demo_single(tc["label"], tc["f"], tc["df"], tc["x0"], tc["root"])
-
-    # ── 3. Generate plots ────────────────────────────────────────────────────
-    print("\n[→] Generating plots...")
-    plot_convergence(results)
-    plot_summary_bar(results)
-    plot_function_roots(results)
-    plot_coc_comparison(results)
-
-    print("\n" + "=" * 90)
-    print("  All done! Four plots saved in the project directory.")
-    print("  convergence_comparison.png  - Error vs Iterations (log scale)")
-    print("  efficiency_summary.png      - Iterations & NFEV bar chart")
-    print("  root_paths.png              - Function plots with iteration paths")
-    print("  coc_comparison.png          - Computational Order of Convergence")
-    print("=" * 90 + "\n")
+    print("\n" + "=" * 100)
+    print("  All benchmark suites completed and plots saved in /plots directory!")
+    print("=" * 100 + "\n")
 
 
 if __name__ == "__main__":
