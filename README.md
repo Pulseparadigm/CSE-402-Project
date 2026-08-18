@@ -8,14 +8,19 @@
 
 ## 📌 Overview
 
-This repository provides an implementation and empirical analysis of the **Weerakoon-Fernando Variant of Newton's Method (VNM)** along with higher-order, derivative-free, and multivariate extensions.
+This repository provides an implementation, theoretical extensions, and empirical benchmarking of the **Weerakoon-Fernando Variant of Newton's Method (VNM)** and its modern upgrades.
 
-### Implemented Methods
-1. **Newton–Raphson Method** (Quadratic Convergence, Order 2)
-2. **Weerakoon–Fernando Method (VNM)** (Trapezoidal Rule, Order 3)
-3. **Simpson–VNM Upgrade** (Simpson's 1/3 Rule, Order 4)
-4. **Steffensen–VNM Upgrade** (Derivative-Free Finite Difference, Order 3)
-5. **Multivariate VNM System** (Systems of Nonlinear Equations $F(X) = 0$)
+---
+
+## 📋 Detailed Performance Comparison Report
+
+| Method | Order ($p$) | Analytical $f'$ Needed? | Iterations to $10^{-15}$ | NFEV Efficiency |
+|--------|------------|-------------------------|--------------------------|-----------------|
+| **Newton–Raphson** | 2 | Yes | 5 – 10 | Baseline (2 eval/iter) |
+| **Weerakoon–Fernando (VNM)** | **3** | Yes | 3 – 5 | High (3 eval/iter) |
+| **Simpson–VNM Upgrade** | **4** | Yes | **2 – 4** | **Highest** (4 eval/iter) |
+| **Steffensen–VNM Upgrade** | **3** | ❌ **No** | 3 – 5 | High (3-4 eval/iter) |
+| **Multivariate VNM System** | **3** | Jacobian $J(X)$ | **3** | High (2 Jacobians/iter) |
 
 ---
 
@@ -39,8 +44,9 @@ This repository provides an implementation and empirical analysis of the **Weera
 
 ```text
 CSE-402-Project/
-├── README.md                           # Main repository overview
-├── walkthrough.md                      # Detailed comparative analysis report
+├── README.md                           # Main repository overview & benchmark table
+├── report.md                           # Detailed performance comparison report
+├── walkthrough.md                      # Complete comparative report
 ├── implementation_plans.md             # Code specs & extension formulas
 ├── .gitignore                          # Git ignore configuration
 ├── src/
